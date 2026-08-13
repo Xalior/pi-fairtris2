@@ -35,7 +35,6 @@ their own, and those are not built in the parent repository.
 
 ```
 fairtris2/          the game, a submodule, pinned at upstream and never written to
-circle-libsdl2/     the SDL2 for this machine, a submodule, pinned
 circle-libfpc/      the Free Pascal side of the build, a submodule, pinned
 rapi-bootloader/    the board bring-up this family boots through, a submodule, pinned
 patches/            the four compile-time guards the game needs, as patch files
@@ -43,6 +42,12 @@ tools/stage-game    copies the game's source into the build tree and patches the
 mk/toolchain.mk     finds the cross compiler
 Makefile            the build
 ```
+
+`circle-libsdl2` is not a direct dependency of this repository. It is
+`circle-libfpc`'s own dependency, and belongs one level deeper — a submodule
+of `circle-libfpc`, arriving through this repository's recursive clone rather
+than a submodule of its own here. See "Where this lives" below for what that
+needs from `circle-libfpc` before it is actually wired.
 
 There is no C or C++ here, and nothing written for this port starts the board.
 That is circle-libfpc's host kernel (`host/kernel.cpp` there), included the
@@ -128,10 +133,10 @@ explanation in its header.
 
 ## Where this lives
 
-This is its own repository. `fairtris2` (the game), `circle-libsdl2`,
-`circle-libfpc` and `rapi-bootloader` are each a real submodule, pinned at a
-published commit, so a fresh clone with `--recurse-submodules` gets everything
-this port names.
+This is its own repository. `fairtris2` (the game), `circle-libfpc` and
+`rapi-bootloader` are each a real submodule, pinned at a published commit, so
+a fresh clone with `--recurse-submodules` gets everything this repository
+names directly.
 
 A repository that vendors this port as a submodule of its own — building
 several boards' worth of ports side by side, say — can still override the
@@ -140,18 +145,27 @@ build's dependency variables (`CIRCLE_WORLDS`, `SHIM`, `LIBFPC_HOME`,
 copies instead of this port's pinned ones. See the Makefile's own comments
 above `SHIM` and `LIBFPC_HOME` for how that override works.
 
-**`circle-libfpc`'s own dependency is not wired, and cannot be yet.** The Free
-Pascal compiler, runtime and packages `circle-libfpc` needs are not checked
-out inside `circle-libfpc` — they are a symlink, `circle-libfpc/fpc`, to a
-sibling directory this repository does not yet provide. That sibling would be
+**`circle-libfpc`'s own dependency on `circle-libsdl2` is not wired, and
+cannot be yet.** The design is that `circle-libfpc` owns that dependency —
+`circle-libsdl2` should be `circle-libfpc`'s own submodule, arriving here
+through the recursive clone rather than living in this repository at all —
+but `circle-libfpc` does not yet carry it as a submodule of its own; its
+`Makefile` still defaults `CIRCLE_WORLDS` and `SHIM` to its own directory,
+for a caller to override. Until `circle-libfpc` gains that submodule (and a
+default that points at it), a clone of this repository alone has no
+`circle-libsdl2` anywhere in it — only a larger repository that supplies it
+externally, the way it does today, can complete a build.
+
+**`circle-libfpc`'s own dependency on Free Pascal is not wired either, and
+cannot be yet.** The compiler, runtime and packages `circle-libfpc` needs are
+not checked out inside it — they are a symlink, `circle-libfpc/fpc`, to a
+sibling directory this repository does not provide. That sibling would be
 `fpc/` at the root of this repository. It is not a submodule here: the
 Free Pascal source this build actually uses is a locally patched checkout with
 no remote of its own to publish it to, so there is nothing to point a
 submodule at yet — inventing one would name a commit nobody else could fetch.
 `fpc/` is reserved for it; the submodule drops in at that path once the
-patched tree has a remote of its own. Until then, a clone of this repository
-alone cannot complete a build — only a larger repository that supplies
-`circle-libfpc`'s dependency externally, the way it does today, can.
+patched tree has a remote of its own.
 
 ## Licences
 
