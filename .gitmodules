@@ -1,6 +1,6 @@
 [submodule "fairtris2"]
 	path = fairtris2
-	url = https://github.com/g-maxim-u/Fairtris-2-UC.git
+	url = git@github.com:g-maxim-u/Fairtris-2-UC.git
 [submodule "circle-libfpc"]
 	path = circle-libfpc
 	url = git@github.com:Xalior/circle-libfpc.git
