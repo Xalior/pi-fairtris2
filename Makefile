@@ -46,28 +46,19 @@ IMAGE      = $(IMAGE_$(BOARD))
 
 PORT = $(CURDIR)
 
-# The dependencies this port consumes. Each default names this port's own
-# pinned copy, so a checkout of this port is self-describing; a build inside a
-# larger repository overrides them to point at that repository's editing copy,
-# which is where the worlds and the compiler are actually built. Never build a
-# world from here — a missing one is a wrong variable.
-SHIM          ?= $(PORT)/circle-libsdl2
-CIRCLE_WORLDS ?= $(PORT)/circle-libsdl2
+# CIRCLE-LIBFPC IS THE ONE DEPENDENCY THIS PORT NAMES. It is the Free Pascal
+# side of the build -- the cross-compiler, its runtime, Free Pascal's packages
+# and the host kernel at host/host-kernel.mk, which this port includes rather
+# than carrying a copy of its own. It owns the dependency on the SDL layer, so
+# the SDL layer is reached through it and never named here directly.
+LIBFPC_HOME   ?= $(PORT)/circle-libfpc
 
-# CIRCLE-LIBFPC IS THE ONE DEPENDENCY THIS PORT HAS NO COPY OF, and the default
-# reaches out of the port to find it. It is the Free Pascal side of the build —
-# the cross-compiler, its runtime and Free Pascal's packages, all of them built
-# rather than checked out, and all of them shared with everything else in the
-# parent repository. THE HOST KERNEL IS THIS DEPENDENCY'S TOO: circle-libfpc is
-# the layer between Free Pascal's runtime and Circle, so the C++ that brings a
-# board up and calls into a Pascal program's entry point lives there, at
-# host/host-kernel.mk, and this port includes it rather than carrying a copy of
-# its own. This port is a directory in that repository rather than a
-# repository of its own, so naming its copy is honest; a port with a
-# repository of its own would carry a pinned circle-libfpc the way it carries
-# a pinned circle-libsdl2.
-METAREPO      ?= $(PORT)/..
-LIBFPC_HOME   ?= $(METAREPO)/circle-libfpc
+# The SDL layer, reached through the SDK that owns it. A build inside a larger
+# repository overrides these to point at that repository's editing copies,
+# which is where the worlds and the compiler are actually built. Never build a
+# world from here -- a missing one is a wrong variable.
+SHIM          ?= $(LIBFPC_HOME)/circle-libsdl2
+CIRCLE_WORLDS ?= $(LIBFPC_HOME)/circle-libsdl2
 
 FPC_COMPILER ?= $(LIBFPC_HOME)/fpc/compiler/ppcrossa64
 FPC_UNITS    ?= $(LIBFPC_HOME)/fpc/rtl/units/aarch64-circlesdl2
