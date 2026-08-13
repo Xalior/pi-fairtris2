@@ -1,0 +1,80 @@
+SDL2-for-Pascal — the fourth platform arm, in the copy Fairtris 2 vendors.
+Applies to a copy of the game's `source/` tree with `patch -p1`, from the
+game's top directory. Never to the checkout itself.
+
+SDL2-for-Pascal is the Pascal translation of SDL2's headers. Fairtris 2
+carries its own copy in `source/sdl/`. Every routine in it is declared
+`external SDL_LibName` (or IMG_LibName, MIX_LibName), and each of those
+constants is declared in three arms: Windows, Unix, and Classic Mac OS. A
+target matching none of them leaves the constant undeclared, and the compile
+stops at the first declaration that uses it, saying `identifier not found` —
+naming neither the constant's purpose nor the platform. This adds a fourth
+arm for circlesdl2, and a `uses ctypes` the Unix arm gets from UnixType.
+
+The library name is never opened and never looked up. There is no loader on
+this machine: every SDL2 entry point is resolved when the host kernel's
+Circle build links libSDL2-<board>.a, exactly as a C caller's is. The
+constants exist only so the `external` clauses have something to name.
+
+Nothing is removed and nothing is stubbed. The binding still declares the
+whole of SDL2; Free Pascal emits a reference only where a call is written,
+so a declaration nobody calls never reaches the linker. That is what lets a
+game be ported by relinking it.
+
+The other arms cannot be used instead, and circle-libfpc's own
+patches/README.md records why each was tried and rejected: -dUNIX and
+-dWINDOWS make the binding's interface use units that do not exist on this
+target, and -dMACOS compiles but renames every entry point with a leading
+underscore, so the failure arrives at the link a long way from its cause.
+--- a/source/sdl/sdl2.pas
++++ b/source/sdl/sdl2.pas
+@@ -91,6 +91,11 @@
+       UnixType;
+   {$ENDIF}
+ 
++  {$IFDEF CIRCLESDL2}
++    uses
++      ctypes;
++  {$ENDIF}
++
+ const
+ 
+   {$IFDEF WINDOWS}
+@@ -120,7 +125,11 @@
+     {$ENDIF}
+   {$ENDIF}
+ 
++  {$IFDEF CIRCLESDL2}
++    SDL_LibName = 'SDL2';
++  {$ENDIF}
+ 
++
+ {$DEFINE WANT_CWCHAR_T}
+ {$I ctypes.inc}                  // C data types
+ 
+--- a/source/sdl/sdl2_image.pas
++++ b/source/sdl/sdl2_image.pas
+@@ -63,6 +63,10 @@
+     {$ENDIF}
+   {$ENDIF}
+ 
++  {$IFDEF CIRCLESDL2}
++    IMG_LibName = 'SDL2';
++  {$ENDIF}
++
+   {* Printable format: "%d.%d.%d", MAJOR, MINOR, PATCHLEVEL *}
+   SDL_IMAGE_MAJOR_VERSION = 2;
+   SDL_IMAGE_MINOR_VERSION = 0;
+--- a/source/sdl/sdl2_mixer.pas
++++ b/source/sdl/sdl2_mixer.pas
+@@ -55,6 +55,10 @@
+     {$IFDEF FPC}
+       {$linklib libSDL2_mixer}
+     {$ENDIF}
++  {$ENDIF}
++
++  {$IFDEF CIRCLESDL2}
++    MIX_LibName = 'SDL2';
+   {$ENDIF}
+ 
+   {* Printable format: "%d.%d.%d", MAJOR, MINOR, PATCHLEVEL *}

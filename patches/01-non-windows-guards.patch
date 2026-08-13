@@ -1,0 +1,81 @@
+Fairtris 2 — the three places the game assumes it is on Windows.
+Applies to a copy of the game's `source/` tree with `patch -p1`, from the
+game's top directory. Never to the checkout itself.
+
+Everything here is a compile-time guard. Nothing is removed, nothing is
+rewritten, and a Windows or Linux build of the game reads exactly as it did
+before: each guard's existing behaviour stays in the arm that already had it.
+
+Fairtris.Clock.pp
+    The frame limiter spins on an inline `pause` instruction while it waits
+    for the next frame's tick. `pause` is x86. On aarch64 the assembler stops
+    on the mnemonic, which reads as a broken assembler rather than as a
+    wrong-architecture instruction. `yield` is the Arm instruction with the
+    same meaning — a hint to the core that this thread is in a spin loop —
+    so the arm added for CPUAARCH64 and CPUARM keeps the loop's behaviour.
+
+Fairtris.Help.pp
+    The help screen opens the project's web pages in the system browser,
+    through the LCL unit LCLIntf. There is no browser on a bare-metal board,
+    no LCL, and no Lazarus component library at all in this build. Under
+    CIRCLESDL2 the unit is not used and OpenURL is not called; the screen
+    still terminates the way it always did, which is what the rest of the
+    game is waiting for.
+
+Fairtris.Main.lpr
+    The program links a Windows resource file, Fairtris.Main.res, which
+    carries the executable's icon and version block. It is a PE resource,
+    the file is not in the repository (Lazarus generates it), and no bare
+    metal image has anywhere to put one. The directive is guarded to
+    WINDOWS, where it already was in effect.
+--- a/source/Fairtris.Clock.pp
++++ b/source/Fairtris.Clock.pp
+@@ -231,9 +231,15 @@
+   SDL_Delay(Round(SleepTime));
+ 
+   while GetCounterValue() < FFrameTicksNext do
++  {$IF DEFINED(CPUAARCH64) OR DEFINED(CPUARM)}
+   asm
++    yield
++  end;
++  {$ELSE}
++  asm
+     pause
+   end;
++  {$ENDIF}
+ end;
+ 
+ 
+--- a/source/Fairtris.Help.pp
++++ b/source/Fairtris.Help.pp
+@@ -36,7 +36,9 @@
+ implementation
+ 
+ uses
++  {$IFNDEF CIRCLESDL2}
+   LCLIntf,
++  {$ENDIF}
+   Fairtris.Logic,
+   Fairtris.Constants;
+ 
+@@ -58,7 +60,9 @@
+     SCENE_BSOD:        Address += 'BSoD';
+   end;
+ 
++  {$IFNDEF CIRCLESDL2}
+   OpenURL(Address);
++  {$ENDIF}
+   Terminate();
+ end;
+ 
+--- a/source/Fairtris.Main.lpr
++++ b/source/Fairtris.Main.lpr
+@@ -19,7 +19,7 @@
+ program Fairtris.Main;
+ 
+ {$MODE OBJFPC}{$LONGSTRINGS ON}
+-{$RESOURCE Fairtris.Main.res}
++{$IFDEF WINDOWS}{$RESOURCE Fairtris.Main.res}{$ENDIF}
+ 
+ uses
+   SDL2,

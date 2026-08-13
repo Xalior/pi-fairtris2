@@ -1,0 +1,12 @@
+[submodule "fairtris2"]
+	path = fairtris2
+	url = https://github.com/g-maxim-u/Fairtris-2-UC.git
+[submodule "circle-libsdl2"]
+	path = circle-libsdl2
+	url = git@github.com:Xalior/circle-libsdl2.git
+[submodule "circle-libfpc"]
+	path = circle-libfpc
+	url = git@github.com:Xalior/circle-libfpc.git
+[submodule "rapi-bootloader"]
+	path = rapi-bootloader
+	url = git@github.com:Xalior/rapi-bootloader.git

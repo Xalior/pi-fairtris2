@@ -1,0 +1,12 @@
+# Build products. build/<board>/ holds one board's objects, the Free Pascal
+# blob, the copy of the game's source this build patched, and the image.
+# build/sd-card/ is what `gmake card` stages.
+/build/
+
+# The cross toolchain: gigabytes of vendor binaries, either unpacked here or
+# symlinked to an install elsewhere. See mk/toolchain.mk. Both arrangements are
+# ignored, so the symlink form is not mistaken for a file to commit.
+/toolchains
+/toolchains/
+
+.DS_Store

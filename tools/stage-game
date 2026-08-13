@@ -1,0 +1,161 @@
+#!/bin/sh
+#
+# stage-game — copy the pinned game source into the build tree and patch the
+# copy.
+#
+#   usage: stage-game <game-checkout> <stage-dir> <patch-dir>
+#
+# THE CHECKOUT IS NEVER WRITTEN TO. It is a submodule pinned at an upstream
+# commit, and this port does not fork the games it builds. The three guards the
+# game needs for a non-Windows target, and the fourth platform arm its vendored
+# SDL2 binding needs, are carried here as patch files and applied to a copy.
+#
+# What that buys, and it is the whole reason for the copy:
+#
+#   The submodule is never dirty, so `git status` reporting it modified is a
+#   real alarm rather than the normal state of a build tree. This script stops
+#   when it sees one.
+#
+#   The patch applies to a known-good tree or it does not apply at all. There
+#   is no "already applied" state to reason about, no half-patched tree to
+#   inherit, and advancing the pin to a newer upstream either still works or
+#   fails here, at the point a person can read why.
+#
+# IT IS RUN WHILE MAKE READS THE MAKEFILE, not from a recipe. The Free Pascal
+# build reads the source directory to decide what the program depends on, so
+# the staged tree has to exist before make decides anything.
+#
+# Re-staging is decided by a stamp: the upstream commit, the state of the
+# checkout, and the contents of every patch file. Unchanged inputs stage
+# nothing at all, so an ordinary rebuild stays incremental; any change at all
+# rebuilds the tree from the checkout, which gives every file a new timestamp
+# and recompiles the game.
+#
+# Progress and failures go to stderr, so they reach the terminal through
+# make's $(shell ...). The single word on stdout is what make tests.
+
+set -e
+
+GAME=$1
+STAGE=$2
+PATCHDIR=$3
+
+if [ -z "$GAME" ] || [ -z "$STAGE" ] || [ -z "$PATCHDIR" ]; then
+    echo "  STAGE usage: stage-game <game-checkout> <stage-dir> <patch-dir>" >&2
+    exit 1
+fi
+
+say() { echo "  STAGE $*" >&2; }
+
+# ---------------------------------------------------------------------------
+# The checkout has to be there, and has to be untouched
+# ---------------------------------------------------------------------------
+
+if [ ! -f "$GAME/source/Fairtris.Main.lpr" ]; then
+    say "no game source at $GAME/source."
+    say "The submodule is not checked out. From the repository root:"
+    say "    git submodule update --init fairtris2/fairtris2"
+    exit 1
+fi
+
+# Tracked files that differ from the pin. Nothing in this build writes to the
+# checkout, so any of these is an edit somebody made by hand — and the patches
+# below were cut against the pinned text, so applying them to changed text is
+# the one case that can produce a tree nobody can account for.
+DIRTY=$(git -C "$GAME" status --porcelain --untracked-files=no 2>/dev/null || true)
+if [ -n "$DIRTY" ]; then
+    say "the game checkout has modified tracked files:"
+    echo "$DIRTY" | while IFS= read -r line; do say "    $line"; done
+    say ""
+    say "$GAME is a submodule pinned at an upstream commit and this port never"
+    say "writes to it — every change this port needs is a patch file in"
+    say "$PATCHDIR, applied to a copy. Restore it before building:"
+    say "    git -C $GAME checkout -- ."
+    exit 1
+fi
+
+# Untracked files are worth saying out loud and are not worth stopping for:
+# they are not copied and cannot reach the patch.
+UNTRACKED=$(git -C "$GAME" ls-files --others --exclude-standard 2>/dev/null || true)
+if [ -n "$UNTRACKED" ]; then
+    say "note: untracked files in the game checkout (not staged, not built):"
+    echo "$UNTRACKED" | while IFS= read -r line; do say "    $line"; done
+fi
+
+# ---------------------------------------------------------------------------
+# Has anything changed since the tree was staged?
+# ---------------------------------------------------------------------------
+
+PATCHES=$(ls "$PATCHDIR"/*.patch 2>/dev/null || true)
+if [ -z "$PATCHES" ]; then
+    say "no patch files in $PATCHDIR."
+    say "The game does not build for this target unpatched, so an empty patch"
+    say "directory is a checkout problem rather than a build with nothing to do."
+    exit 1
+fi
+
+COMMIT=$(git -C "$GAME" rev-parse HEAD 2>/dev/null || echo unknown)
+# shellcheck disable=SC2086
+STAMP_ID=$(printf '%s\n' "$COMMIT" | cat - $PATCHES | shasum -a 256 | cut -d' ' -f1)
+STAMP=$STAGE/.stage-stamp
+
+if [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$STAMP_ID" ] && \
+   [ -f "$STAGE/source/Fairtris.Main.lpr" ]; then
+    echo ok
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Copy, then patch the copy
+# ---------------------------------------------------------------------------
+
+say "$GAME/source at $COMMIT -> $STAGE/source"
+
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+cp -R "$GAME/source" "$STAGE/source"
+
+LOG=$STAGE/.stage-patch.log
+: > "$LOG"
+
+for p in $PATCHES; do
+    say "applying $(basename "$p")"
+    # -p1 because the patches are written with the a/ and b/ prefixes and the
+    # game-relative paths they have upstream, so the same file reads correctly
+    # against the upstream repository and applies to a real checkout with the
+    # command in patches/README.md.
+    #
+    # -F0 BECAUSE PATCH'S DEFAULT IS TO GUESS. Given a hunk whose context no
+    # longer matches, patch will by default look a couple of lines either way
+    # and apply it anyway, reporting only a "fuzz" it does not fail on. That is
+    # the one outcome this whole arrangement exists to exclude: a guard landing
+    # in the wrong place in a file upstream has changed, in a build that
+    # reports success. Zero fuzz means the context matches the pinned text
+    # exactly or the patch does not apply.
+    #
+    # --forward so a patch that is somehow already applied is a failure here
+    # rather than a silent reversal of the guard it adds.
+    #
+    # -t so patch never asks a question. It prompts for a filename when it
+    # cannot work one out, and an unattended build would sit at that prompt.
+    if ! patch -p1 -F0 -t --forward -d "$STAGE" < "$p" >> "$LOG" 2>&1; then
+        say ""
+        say "PATCH FAILED: $(basename "$p")"
+        say ""
+        sed 's/^/        /' "$LOG" >&2
+        say ""
+        say "The patch was cut against $GAME at the commit that submodule is"
+        say "pinned at. A failure here means the pin moved and upstream changed"
+        say "the text the patch edits. Read the patch — its header says what it"
+        say "changes and why — and re-cut it against the new upstream text."
+        say ""
+        say "The staged tree has been removed. Nothing half-patched was left"
+        say "behind and no image was built from it."
+        rm -rf "$STAGE"
+        exit 1
+    fi
+done
+
+echo "$STAMP_ID" > "$STAMP"
+say "ready"
+echo ok
