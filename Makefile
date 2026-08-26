@@ -77,19 +77,20 @@ FPC_PACKAGES ?= $(LIBFPC_HOME)/fpc/packages
 # this family uses — one directory per game under /games.
 RAPI_WORK_DIR ?= /games/fairtris2
 
-# THE VIRTUAL DISPLAY SIZE, AND IT IS A BUILD PARAMETER TOO.
+# THE VIRTUAL FRAMEBUFFER SIZE, AND IT IS A BUILD PARAMETER TOO.
 #
 # The game's own SDL_CreateWindow call asks for 0x0 and resizes itself
-# afterwards with SDL_SetWindowSize, which this shim does not implement --
-# see circle-libfpc's host/kernel.cpp header comment. Nothing in the kernel or
-# the library names a size for it, so this is the only place anywhere that
-# does: it is stamped into the built image's own boot argument block
+# afterwards with SDL_SetWindowSize. The library carries that resize, so the
+# game does settle its own canvas in the end -- but not until it runs, and the
+# window it created before then named no size at all. This is what the canvas
+# is in between, and it is the only place anywhere that names one: it is
+# stamped into the built image's own boot argument block
 # (bootargs.cpp) by circle-libsdl2's tools/stamp-bootargs, below, so the image
 # carries it with nothing passed at boot time. Fairtris draws a 336x240 buffer
 # of NES pixels, 8:7 rather than square (BUFFER_WIDTH/BUFFER_HEIGHT and
 # BUFFER_PIXEL_RATIO_X), so 384x240 is that picture in square pixels and the
 # library performs the only scale, fitting the VFB to the panel.
-RAPI_VDISPLAY ?= 384x240
+RAPI_VFB ?= 384x240
 
 # Passed to every self-recursive board build below. Each has a default above
 # naming this port's own pinned copy; the parent repository overrides them to
@@ -97,7 +98,7 @@ RAPI_VDISPLAY ?= 384x240
 BOARD_ARGS = SHIM=$(SHIM) CIRCLE_WORLDS=$(CIRCLE_WORLDS) \
 	LIBFPC_HOME=$(LIBFPC_HOME) FPC_COMPILER=$(FPC_COMPILER) \
 	FPC_UNITS=$(FPC_UNITS) FPC_PACKAGES=$(FPC_PACKAGES) \
-	RAPI_WORK_DIR=$(RAPI_WORK_DIR) RAPI_VDISPLAY=$(RAPI_VDISPLAY)
+	RAPI_WORK_DIR=$(RAPI_WORK_DIR) RAPI_VFB=$(RAPI_VFB)
 
 .PHONY: help kernels rebuild verify card clean-boards check-deps $(BOARDS)
 .PHONY: $(addprefix rebuild-,$(BOARDS)) build check-deps-report clean-board
@@ -328,14 +329,14 @@ LIBS := $(FPC_APP_LIBS) $(SHIM)/libSDL2-$(BOARD).a $(CIRCLE_STDLIB_LIBS)
 include $(SHIM)/sdl-app.mk
 
 # THE STAMP RUNS ON EVERY INVOCATION, not only when the image is relinked:
-# `build` is phony, so a change to RAPI_VDISPLAY alone (no source touched)
+# `build` is phony, so a change to RAPI_VFB alone (no source touched)
 # still reaches the image. circle-libsdl2's tools/stamp-bootargs rewrites the
 # block's Text field whole, so stamping an already-stamped image is not
 # cumulative. It is SHIM's tool, not this port's -- SHIM is how this
 # Makefile already locates circle-libsdl2, whether that is this port's own
 # pinned copy or a larger repository's editing copy (see SHIM, above).
 build: $(TARGET).img
-	@$(SHIM)/tools/stamp-bootargs $(TARGET).img "--rapi-vdisplay=$(RAPI_VDISPLAY)"
+	@$(SHIM)/tools/stamp-bootargs $(TARGET).img "--rapi-vfb=$(RAPI_VFB)"
 
 # What this build reached for, read out of the variables that decided it. Every
 # line is a path; the mark beside it says whether that path is there. Nothing

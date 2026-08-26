@@ -54,7 +54,7 @@ That is circle-libfpc's host kernel (`host/kernel.cpp` there), included the
 way `fpc-app.mk` and `sdl-app.mk` already are. It makes three declarations on
 the game's behalf that a desktop would have worked out for itself: the size of
 the display, where the game's files are, and what the working directory is —
-the first is `RAPI_VDISPLAY` below, the other two follow from `RAPI_WORK_DIR`.
+the first is `RAPI_VFB` below, the other two follow from `RAPI_WORK_DIR`.
 circle-libfpc's own `host/kernel.h` explains each one.
 
 ## Building
